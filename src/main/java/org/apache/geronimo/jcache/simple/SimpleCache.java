@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -112,7 +111,7 @@ public class SimpleCache<K, V> implements Cache<K, V> {
                 properties.getProperty(cacheName + ".evictionPause", properties.getProperty("evictionPause", "30000")));
         if (evictionPause > 0) {
             final long maxDeleteByEvictionRun = Long.parseLong(property(properties, cacheName, "maxDeleteByEvictionRun", "100"));
-            pool.submit(new EvictionThread<>(this, evictionPause, maxDeleteByEvictionRun));
+            pool.submit(new EvictionThread(evictionPause, maxDeleteByEvictionRun));
         }
 
         serializations = new Serializations(property(properties, cacheName, "serialization.whitelist", null));
@@ -286,6 +285,10 @@ public class SimpleCache<K, V> implements Cache<K, V> {
     private void expires(final SimpleKey<K> cacheKey) {
         final SimpleElement<V> elt = delegate.get(cacheKey);
         delegate.remove(cacheKey);
+        onExpired(cacheKey, elt);
+    }
+
+    private void onExpired(final SimpleKey<K> cacheKey, final SimpleElement<V> elt) {
         for (final SimpleListener<K, V> listener : listeners.values()) {
             listener.onExpired(Collections.<CacheEntryEvent<? extends K, ? extends V>> singletonList(
                     new SimpleEvent<>(this, EventType.REMOVED, null, cacheKey.getKey(), elt.getElement())));
@@ -778,32 +781,32 @@ public class SimpleCache<K, V> implements Cache<K, V> {
         }
     }
 
-    private static class EvictionThread<K> implements Runnable {
+    private class EvictionThread implements Runnable {
 
         private final long pause;
 
         private final long maxDelete;
 
-        private final SimpleCache<K, ?> cache;
-
-        private EvictionThread(final SimpleCache<K, ?> cache, final long evictionPause, final long maxDelete) {
-            this.cache = cache;
+        private EvictionThread(final long evictionPause, final long maxDelete) {
             this.pause = evictionPause;
             this.maxDelete = maxDelete;
         }
 
         @Override
         public void run() {
-            while (!cache.isClosed()) {
+            while (!isClosed()) {
                 try {
-                    Thread.sleep(pause * 10000);
+                    Thread.sleep(pause);
                 } catch (final InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 }
+                if (delegate.isEmpty()) {
+                    continue;
+                }
 
                 try {
-                    final List<SimpleKey<K>> keys = new ArrayList<>(new TreeSet<>(cache.delegate.keySet()));
+                    final List<SimpleKey<K>> keys = new ArrayList<>(delegate.keySet());
                     Collections.sort(keys, new Comparator<SimpleKey<K>>() {
 
                         @Override
@@ -818,10 +821,11 @@ public class SimpleCache<K, V> implements Cache<K, V> {
 
                     int delete = 0;
                     for (final SimpleKey<K> key : keys) {
-                        final SimpleElement<?> elt = cache.delegate.get(key);
+                        final SimpleElement<V> elt = delegate.get(key);
                         if (elt != null && elt.isExpired()) {
-                            cache.delegate.remove(key);
-                            cache.statistics.increaseEvictions(1);
+                            delegate.remove(key);
+                            statistics.increaseEvictions(1);
+                            onExpired(key, elt);
                             delete++;
                             if (delete >= maxDelete) {
                                 break;
