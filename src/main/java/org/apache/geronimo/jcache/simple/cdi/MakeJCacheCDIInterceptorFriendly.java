@@ -150,9 +150,9 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
                 final InjectionTarget<CDIJCacheHelper> injectionTarget, final String id) {
             this.at = annotatedType;
             this.it = injectionTarget;
-            this.id = "JCS#CDIHelper#" + id;
+            this.id = "JCache#CDIHelper#" + id;
 
-            this.qualifiers = new HashSet<Annotation>();
+            this.qualifiers = new HashSet<>();
             this.qualifiers.add(new AnnotationLiteral<Default>() {
             });
             this.qualifiers.add(new AnnotationLiteral<Any>() {

@@ -34,7 +34,7 @@
   <properties>
 
     <implementation-groupId>${project.groupId}</implementation-groupId>
-    <implementation-artifactId>commons-jcs</implementation-artifactId>
+    <implementation-artifactId>${project.artifactId}</implementation-artifactId>
     <implementation-version>${project.version}</implementation-version>
 
     <CacheManagerImpl>org.apache.geronimo.jcache.simple.SimpleManager</CacheManagerImpl>
