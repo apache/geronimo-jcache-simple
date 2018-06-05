@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Statistics {
 
     private final AtomicLong removals = new AtomicLong();
-    private final AtomicLong expiries = new AtomicLong();
+    private final AtomicLong expires = new AtomicLong();
     private final AtomicLong puts = new AtomicLong();
     private final AtomicLong hits = new AtomicLong();
     private final AtomicLong misses = new AtomicLong();
@@ -70,7 +70,7 @@ public class Statistics {
     }
 
     public void increaseExpiries(final long number) {
-        increment(expiries, number);
+        increment(expires, number);
     }
 
     public void increasePuts(final long number) {
@@ -125,7 +125,7 @@ public class Statistics {
         puts.set(0);
         misses.set(0);
         removals.set(0);
-        expiries.set(0);
+        expires.set(0);
         hits.set(0);
         evictions.set(0);
         getTimeTaken.set(0);
