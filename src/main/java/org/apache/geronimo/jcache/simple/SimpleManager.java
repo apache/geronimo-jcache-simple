@@ -129,7 +129,7 @@ public class SimpleManager implements CacheManager {
     public void enableManagement(final String cacheName, final boolean enabled) {
         assertNotClosed();
         assertNotNull(cacheName, "cacheName");
-        final SimpleCache<?, ?> cache = getJCSCache(cacheName);
+        final SimpleCache<?, ?> cache = of(cacheName);
         if (cache != null) {
             if (enabled) {
                 cache.enableManagement();
@@ -139,7 +139,7 @@ public class SimpleManager implements CacheManager {
         }
     }
 
-    private SimpleCache<?, ?> getJCSCache(final String cacheName) {
+    private SimpleCache<?, ?> of(final String cacheName) {
         return SimpleCache.class.cast(ClassLoaderAwareCache.getDelegate(caches.get(cacheName)));
     }
 
@@ -147,7 +147,7 @@ public class SimpleManager implements CacheManager {
     public void enableStatistics(final String cacheName, final boolean enabled) {
         assertNotClosed();
         assertNotNull(cacheName, "cacheName");
-        final SimpleCache<?, ?> cache = getJCSCache(cacheName);
+        final SimpleCache<?, ?> cache = of(cacheName);
         if (cache != null) {
             if (enabled) {
                 cache.enableStatistics();
