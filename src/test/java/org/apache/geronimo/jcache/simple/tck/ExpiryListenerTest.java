@@ -26,6 +26,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import javax.cache.Cache;
@@ -54,25 +55,34 @@ public class ExpiryListenerTest {
                 new Properties() {{
                     setProperty("evictionPause", "2");
                 }});
-        final CacheEntryExpiredListenerImpl listener = new CacheEntryExpiredListenerImpl();
+
+        final CountDownLatch latch = new CountDownLatch(1);
+        final CacheEntryExpiredListenerImpl listener = new CacheEntryExpiredListenerImpl(latch);
         cacheManager.createCache("default", new MutableConfiguration<String, String>()
                 .setExpiryPolicyFactory(new FactoryBuilder.SingletonFactory<ExpiryPolicy>(
                         new CreatedExpiryPolicy(new Duration(TimeUnit.MILLISECONDS, 2))))
-                .addCacheEntryListenerConfiguration(new MutableCacheEntryListenerConfiguration<String, String>(
+                .addCacheEntryListenerConfiguration(new MutableCacheEntryListenerConfiguration<>(
                         FactoryBuilder.factoryOf(listener),
                         null, false, false
                 )));
         final Cache<String, String> cache = cacheManager.getCache("default");
         assertFalse(cache.containsKey("foo"));
         cache.put("foo", "bar");
-        Thread.sleep(20);
+        latch.await(1, TimeUnit.MINUTES);
         assertEquals(1, listener.events.size());
         cachingProvider.close();
     }
 
     private static class CacheEntryExpiredListenerImpl implements CacheEntryExpiredListener<String, String>, Serializable {
+
         private final Collection<CacheEntryEvent<? extends String, ? extends String>> events =
                 new ArrayList<CacheEntryEvent<? extends String, ? extends String>>();
+
+        private CountDownLatch latch;
+
+        public CacheEntryExpiredListenerImpl(final CountDownLatch latch) {
+            this.latch = latch;
+        }
 
         @Override
         public void onExpired(final Iterable<CacheEntryEvent<? extends String, ? extends String>> cacheEntryEvents)
@@ -80,6 +90,7 @@ public class ExpiryListenerTest {
             for (final CacheEntryEvent<? extends String, ? extends String> cacheEntryEvent : cacheEntryEvents) {
                 events.add(cacheEntryEvent);
             }
+            latch.countDown();
         }
     }
 }
