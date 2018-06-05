@@ -113,7 +113,7 @@ public class Statistics {
             return;
         }
 
-        if (counter.get() < Long.MAX_VALUE - duration) {
+        if (counter.get() + duration < Long.MAX_VALUE) {
             counter.addAndGet(duration);
         } else {
             reset();
