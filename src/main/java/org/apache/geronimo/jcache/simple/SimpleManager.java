@@ -66,10 +66,12 @@ public class SimpleManager implements CacheManager {
         try {
             if (SimpleProvider.DEFAULT_URI.toString().equals(uri.toString()) || uri.getScheme().equals("geronimo")) {
 
-                final Enumeration<URL> resources = loader.getResources(uri.getPath());
-                do {
-                    addProperties(resources.nextElement(), props);
-                } while (resources.hasMoreElements());
+                final Enumeration<URL> resources = loader.getResources(uri.toASCIIString().substring((uri.getScheme() + "://").length()));
+                while (resources.hasMoreElements()) {
+                    do {
+                        addProperties(resources.nextElement(), props);
+                    } while (resources.hasMoreElements());
+                }
             } else {
                 props.load(uri.toURL().openStream());
             }
