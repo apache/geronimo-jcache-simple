@@ -55,7 +55,7 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
     private static final AtomicInteger id = new AtomicInteger();
 
     private static final boolean USE_ID = !Boolean.getBoolean("org.apache.geronimo.jcache.simple.skip-id");
-    private static final boolean SKIP = !Boolean.getBoolean("org.apache.geronimo.jcache.simple.skip-cdi");
+    private static final boolean SKIP = Boolean.getBoolean("org.apache.geronimo.jcache.simple.skip-cdi");
 
     private boolean needHelper = true;
 
