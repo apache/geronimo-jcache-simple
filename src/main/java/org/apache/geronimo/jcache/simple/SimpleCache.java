@@ -21,6 +21,7 @@ package org.apache.geronimo.jcache.simple;
 import static org.apache.geronimo.jcache.simple.Asserts.assertNotNull;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -32,8 +33,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.cache.Cache;
 import javax.cache.CacheException;
@@ -84,10 +88,13 @@ public class SimpleCache<K, V> implements Cache<K, V> {
 
     private final Serializations serializations;
 
+    private final Collection<Future<?>> poolTasks = new CopyOnWriteArraySet<>();
+
     private volatile boolean closed = false;
 
     public SimpleCache(final ClassLoader classLoader, final SimpleManager mgr, final String cacheName,
-            final SimpleConfiguration<K, V> configuration, final Properties properties) {
+            final SimpleConfiguration<K, V> configuration, final Properties properties,
+            final ExecutorService executorService) {
         manager = mgr;
 
         name = cacheName;
@@ -97,21 +104,13 @@ public class SimpleCache<K, V> implements Cache<K, V> {
         final int concurrencyLevel = Integer.parseInt(property(properties, cacheName, "concurrencyLevel", "16"));
         delegate = new ConcurrentHashMap<>(capacity, loadFactor, concurrencyLevel);
         config = configuration;
-
-        ExecutorService executorService = rawProperty(properties, cacheName, "pool"); // lookup etc support
-        if (executorService == null) {
-            final int poolSize = Integer.parseInt(property(properties, cacheName, "pool.size", "3"));
-            final SimpleThreadFactory threadFactory = new SimpleThreadFactory("geronimo-simple-jcache-" + cacheName + "-");
-            executorService = poolSize > 0 ? Executors.newFixedThreadPool(poolSize, threadFactory)
-                    : Executors.newCachedThreadPool(threadFactory);
-        }
         pool = executorService;
 
         final long evictionPause = Long.parseLong(
                 properties.getProperty(cacheName + ".evictionPause", properties.getProperty("evictionPause", "30000")));
         if (evictionPause > 0) {
             final long maxDeleteByEvictionRun = Long.parseLong(property(properties, cacheName, "maxDeleteByEvictionRun", "100"));
-            pool.submit(new EvictionThread(evictionPause, maxDeleteByEvictionRun));
+            addPoolTask(new EvictionThread(evictionPause, maxDeleteByEvictionRun));
         }
 
         serializations = new Serializations(property(properties, cacheName, "serialization.whitelist", null));
@@ -522,13 +521,35 @@ public class SimpleCache<K, V> implements Cache<K, V> {
         for (final K k : keys) {
             assertNotNull(k, "a key");
         }
-        pool.submit(new Runnable() {
+        addPoolTask(new Runnable() {
 
             @Override
             public void run() {
                 doLoadAll(keys, replaceExistingValues, completionListener);
             }
         });
+    }
+
+    private void addPoolTask(final Runnable runnable) {
+        final AtomicReference<Future<?>> ref = new AtomicReference<>();
+        final CountDownLatch refIsSet = new CountDownLatch(1);
+        ref.set(pool.submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    runnable.run();
+                } finally {
+                    try {
+                        refIsSet.await();
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    poolTasks.remove(ref.get());
+                }
+            }
+        }));
+        refIsSet.countDown();
+        poolTasks.add(ref.get());
     }
 
     private void doLoadAll(final Set<? extends K> keys, final boolean replaceExistingValues,
@@ -681,31 +702,30 @@ public class SimpleCache<K, V> implements Cache<K, V> {
             return;
         }
 
-        for (final Runnable task : pool.shutdownNow()) {
-            task.run();
+        for (final Future<?> task : poolTasks) {
+            task.cancel(true);
         }
 
-        // todo: better error handling (try/catch/log/suppressed)
+        final CacheException ce = new CacheException();
         manager.release(getName());
         closed = true;
-        try {
-            close(loader);
-            close(writer);
-            close(expiryPolicy);
-        } catch (final Exception e) {
-            throw new CacheException(e);
-        }
+        close(loader, ce);
+        close(writer, ce);
+        close(expiryPolicy, ce);
         for (final SimpleListener<K, V> listener : listeners.values()) {
             try {
                 listener.close();
             } catch (final Exception e) {
-                throw new CacheException(e);
+                ce.addSuppressed(e);
             }
         }
         listeners.clear();
         JMXs.unregister(cacheConfigObjectName);
         JMXs.unregister(cacheStatsObjectName);
         delegate.clear();
+        if (ce.getSuppressed().length > 0) {
+            throw ce;
+        }
     }
 
     @Override
@@ -756,14 +776,6 @@ public class SimpleCache<K, V> implements Cache<K, V> {
         return properties.getProperty(cacheName + "." + name, properties.getProperty(name, defaultValue));
     }
 
-    private static <T> T rawProperty(final Properties properties, final String cacheName, final String name) {
-        final Object value = properties.get(cacheName + "." + name);
-        if (value == null) {
-            return (T) properties.get(name);
-        }
-        return (T) value;
-    }
-
     private static boolean isNotZero(final Duration duration) {
         return duration == null || !duration.isZero();
     }
@@ -775,9 +787,13 @@ public class SimpleCache<K, V> implements Cache<K, V> {
         throw new EntryProcessorException(ex);
     }
 
-    private static void close(final Object potentiallyCloseable) throws Exception {
+    private static void close(final Object potentiallyCloseable, final CacheException wrapper) {
         if (AutoCloseable.class.isInstance(potentiallyCloseable)) {
-            AutoCloseable.class.cast(potentiallyCloseable).close();
+            try {
+                AutoCloseable.class.cast(potentiallyCloseable).close();
+            } catch (final Exception re) {
+                wrapper.addSuppressed(re);
+            }
         }
     }
 

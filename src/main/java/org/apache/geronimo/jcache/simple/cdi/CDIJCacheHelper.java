@@ -151,31 +151,12 @@ public class CDIJCacheHelper {
                 : cacheResolverFactoryFor(defaults, cacheRemoveAll.cacheResolverFactory());
 
         return new MethodMeta(parameterTypes, annotations, mtdAnnotations, keyParameterIndexes(ic.getMethod()),
-                getValueParameter(annotations), getKeyParameters(annotations), cacheResultCacheResultName,
+                getValueParameter(annotations), cacheResultCacheResultName,
                 cacheResultCacheResolverFactory, cacheResultCacheKeyGenerator, cacheResult, cachePutCachePutName,
                 cachePutCacheResolverFactory, cachePutCacheKeyGenerator, cachePut != null && cachePut.afterInvocation(), cachePut,
                 cacheRemoveCacheRemoveName, cacheRemoveCacheResolverFactory, cacheRemoveCacheKeyGenerator,
                 cacheRemove != null && cacheRemove.afterInvocation(), cacheRemove, cacheRemoveAllCacheRemoveAllName,
-                cacheRemoveAllCacheResolverFactory, cacheRemoveAll != null && cacheRemoveAll.afterInvocation(), cacheRemoveAll);
-    }
-
-    private Integer[] getKeyParameters(final List<Set<Annotation>> annotations) {
-        final Collection<Integer> list = new ArrayList<Integer>();
-        int idx = 0;
-        for (final Set<Annotation> set : annotations) {
-            for (final Annotation a : set) {
-                if (a.annotationType() == CacheKey.class) {
-                    list.add(idx);
-                }
-            }
-            idx++;
-        }
-        if (list.isEmpty()) {
-            for (int i = 0; i < annotations.size(); i++) {
-                list.add(i);
-            }
-        }
-        return list.toArray(new Integer[list.size()]);
+                cacheRemoveAllCacheResolverFactory, cacheRemoveAll);
     }
 
     private Integer getValueParameter(final List<Set<Annotation>> annotations) {
@@ -409,8 +390,6 @@ public class CDIJCacheHelper {
 
         private final Integer valueIndex;
 
-        private final Integer[] parameterIndices;
-
         private final String cacheResultCacheName;
 
         private final CacheResolverFactory cacheResultResolverFactory;
@@ -443,24 +422,21 @@ public class CDIJCacheHelper {
 
         private final CacheResolverFactory cacheRemoveAllResolverFactory;
 
-        private final boolean cacheRemoveAllAfter;
-
         private final CacheRemoveAll cacheRemoveAll;
 
         public MethodMeta(Class<?>[] parameterTypes, List<Set<Annotation>> parameterAnnotations, Set<Annotation> annotations,
-                Integer[] keysIndices, Integer valueIndex, Integer[] parameterIndices, String cacheResultCacheName,
+                Integer[] keysIndices, Integer valueIndex, String cacheResultCacheName,
                 CacheResolverFactory cacheResultResolverFactory, CacheKeyGenerator cacheResultKeyGenerator,
                 CacheResult cacheResult, String cachePutCacheName, CacheResolverFactory cachePutResolverFactory,
                 CacheKeyGenerator cachePutKeyGenerator, boolean cachePutAfter, CachePut cachePut, String cacheRemoveCacheName,
                 CacheResolverFactory cacheRemoveResolverFactory, CacheKeyGenerator cacheRemoveKeyGenerator,
                 boolean cacheRemoveAfter, CacheRemove cacheRemove, String cacheRemoveAllCacheName,
-                CacheResolverFactory cacheRemoveAllResolverFactory, boolean cacheRemoveAllAfter, CacheRemoveAll cacheRemoveAll) {
+                CacheResolverFactory cacheRemoveAllResolverFactory, CacheRemoveAll cacheRemoveAll) {
             this.parameterTypes = parameterTypes;
             this.parameterAnnotations = parameterAnnotations;
             this.annotations = annotations;
             this.keysIndices = keysIndices;
             this.valueIndex = valueIndex;
-            this.parameterIndices = parameterIndices;
             this.cacheResultCacheName = cacheResultCacheName;
             this.cacheResultResolverFactory = cacheResultResolverFactory;
             this.cacheResultKeyGenerator = cacheResultKeyGenerator;
@@ -477,7 +453,6 @@ public class CDIJCacheHelper {
             this.cacheRemove = cacheRemove;
             this.cacheRemoveAllCacheName = cacheRemoveAllCacheName;
             this.cacheRemoveAllResolverFactory = cacheRemoveAllResolverFactory;
-            this.cacheRemoveAllAfter = cacheRemoveAllAfter;
             this.cacheRemoveAll = cacheRemoveAll;
         }
 
@@ -513,20 +488,12 @@ public class CDIJCacheHelper {
             return cacheResult;
         }
 
-        public Integer[] getParameterIndices() {
-            return parameterIndices;
-        }
-
         public Set<Annotation> getAnnotations() {
             return annotations;
         }
 
         public Integer[] getKeysIndices() {
             return keysIndices;
-        }
-
-        public Integer getValuesIndex() {
-            return valueIndex;
         }
 
         public Integer getValueIndex() {
@@ -571,10 +538,6 @@ public class CDIJCacheHelper {
 
         public CacheResolverFactory getCacheRemoveAllResolverFactory() {
             return cacheRemoveAllResolverFactory;
-        }
-
-        public boolean isCacheRemoveAllAfter() {
-            return cacheRemoveAllAfter;
         }
 
         public CacheRemoveAll getCacheRemoveAll() {

@@ -30,6 +30,8 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.cache.Cache;
 import javax.cache.CacheException;
@@ -51,6 +53,8 @@ public class SimpleManager implements CacheManager {
 
     private final Properties configProperties;
 
+    private final ExecutorService executorService;
+
     private volatile boolean closed = false;
 
     SimpleManager(final CachingProvider provider, final URI uri, final ClassLoader loader, final Properties properties) {
@@ -59,12 +63,30 @@ public class SimpleManager implements CacheManager {
         this.loader = loader;
         this.properties = readConfig(uri, loader, properties);
         this.configProperties = properties;
+
+        ExecutorService executorService = rawProperty("geronimo.pool");
+        if (executorService == null) {
+            final int poolSize = Integer.parseInt(this.properties.getProperty("pool.size", "16"));
+            final SimpleThreadFactory threadFactory = new SimpleThreadFactory("geronimo-simple-jcache-[" + uri.toASCIIString() + "]-");
+            executorService = poolSize > 0 ? Executors.newFixedThreadPool(poolSize, threadFactory)
+                    : Executors.newCachedThreadPool(threadFactory);
+        }
+        this.executorService = executorService;
+    }
+
+    private <T> T rawProperty(final String name) {
+        final Object value = this.properties.get(name);
+        if (value == null) {
+            return (T) this.properties.get(name);
+        }
+        return (T) value;
     }
 
     private Properties readConfig(final URI uri, final ClassLoader loader, final Properties properties) {
         final Properties props = new Properties();
         try {
-            if (SimpleProvider.DEFAULT_URI.toString().equals(uri.toString()) || uri.getScheme().equals("geronimo")) {
+            if (SimpleProvider.DEFAULT_URI.toString().equals(uri.toString()) || uri.getScheme().equals("geronimo")
+                    || uri.getScheme().equals("classpath")) {
 
                 final Enumeration<URL> resources = loader.getResources(uri.toASCIIString().substring((uri.getScheme() + "://").length()));
                 while (resources.hasMoreElements()) {
@@ -108,7 +130,7 @@ public class SimpleManager implements CacheManager {
         final Class<V> valueType = configuration.getValueType();
         if (!caches.containsKey(cacheName)) {
             final Cache<K, V> cache = ClassLoaderAwareCache.wrap(loader, new SimpleCache<K, V>(loader, this, cacheName,
-                    new SimpleConfiguration<>(configuration, keyType, valueType), properties));
+                    new SimpleConfiguration<>(configuration, keyType, valueType), properties, executorService));
             caches.putIfAbsent(cacheName, cache);
         } else {
             throw new CacheException("cache " + cacheName + " already exists");
@@ -170,6 +192,9 @@ public class SimpleManager implements CacheManager {
             c.close();
         }
         caches.clear();
+        for (final Runnable task : executorService.shutdownNow()) {
+            task.run();
+        }
         closed = true;
         if (SimpleProvider.class.isInstance(provider)) {
             SimpleProvider.class.cast(provider).remove(this);
