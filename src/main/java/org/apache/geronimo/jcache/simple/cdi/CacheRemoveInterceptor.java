@@ -19,6 +19,7 @@
 package org.apache.geronimo.jcache.simple.cdi;
 
 import java.io.Serializable;
+import java.util.concurrent.CompletionStage;
 
 import javax.annotation.Priority;
 import javax.cache.Cache;
@@ -63,6 +64,20 @@ public class CacheRemoveInterceptor implements Serializable {
         final Object result;
         try {
             result = ic.proceed();
+            if (CompletionStage.class.isInstance(result)) {
+                final CompletionStage<?> completionStage = CompletionStage.class.cast(result);
+                completionStage.exceptionally(t -> {
+                    if (afterInvocation) {
+                        if (helper.isIncluded(t.getClass(), cacheRemove.evictFor(), cacheRemove.noEvictFor())) {
+                            cache.remove(cacheKey);
+                        }
+                    }
+                    if (RuntimeException.class.isInstance(t)) {
+                        throw RuntimeException.class.cast(t);
+                    }
+                    throw new IllegalStateException(t);
+                });
+            }
         } catch (final Throwable t) {
             if (afterInvocation) {
                 if (helper.isIncluded(t.getClass(), cacheRemove.evictFor(), cacheRemove.noEvictFor())) {

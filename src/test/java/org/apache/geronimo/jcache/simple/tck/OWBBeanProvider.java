@@ -19,6 +19,7 @@
 package org.apache.geronimo.jcache.simple.tck;
 
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.cache.annotation.BeanProvider;
 import javax.enterprise.inject.spi.Bean;
@@ -30,18 +31,15 @@ import org.apache.webbeans.spi.ContainerLifecycle;
 public class OWBBeanProvider implements BeanProvider {
 
     private final BeanManagerImpl bm;
+    private static final AtomicBoolean STARTED = new AtomicBoolean();
 
     public OWBBeanProvider() {
         final WebBeansContext webBeansContext = WebBeansContext.currentInstance();
-        final ContainerLifecycle lifecycle = webBeansContext.getService(ContainerLifecycle.class);
-        lifecycle.startApplication(null);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-
-            @Override
-            public void run() {
-                lifecycle.stopApplication(null);
-            }
-        });
+        if (STARTED.compareAndSet(false, true)) {
+            final ContainerLifecycle lifecycle = webBeansContext.getService(ContainerLifecycle.class);
+            lifecycle.startApplication(null);
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> lifecycle.stopApplication(null)));
+        }
         bm = webBeansContext.getBeanManagerImpl();
     }
 

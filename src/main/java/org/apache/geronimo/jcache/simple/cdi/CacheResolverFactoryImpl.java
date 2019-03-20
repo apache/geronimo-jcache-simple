@@ -72,4 +72,12 @@ public class CacheResolverFactoryImpl implements CacheResolverFactory {
         cacheManager.close();
         provider.close();
     }
+
+    public CacheManager getCacheManager() {
+        return cacheManager;
+    }
+
+    public CachingProvider getProvider() {
+        return provider;
+    }
 }

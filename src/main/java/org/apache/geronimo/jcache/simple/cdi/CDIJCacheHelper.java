@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
@@ -156,7 +157,8 @@ public class CDIJCacheHelper {
                 cachePutCacheResolverFactory, cachePutCacheKeyGenerator, cachePut != null && cachePut.afterInvocation(), cachePut,
                 cacheRemoveCacheRemoveName, cacheRemoveCacheResolverFactory, cacheRemoveCacheKeyGenerator,
                 cacheRemove != null && cacheRemove.afterInvocation(), cacheRemove, cacheRemoveAllCacheRemoveAllName,
-                cacheRemoveAllCacheResolverFactory, cacheRemoveAll);
+                cacheRemoveAllCacheResolverFactory, cacheRemoveAll,
+                CompletionStage.class.isAssignableFrom(ic.getMethod().getReturnType()));
     }
 
     private Integer getValueParameter(final List<Set<Annotation>> annotations) {
@@ -424,6 +426,8 @@ public class CDIJCacheHelper {
 
         private final CacheRemoveAll cacheRemoveAll;
 
+        private final boolean completionStage;
+
         public MethodMeta(Class<?>[] parameterTypes, List<Set<Annotation>> parameterAnnotations, Set<Annotation> annotations,
                 Integer[] keysIndices, Integer valueIndex, String cacheResultCacheName,
                 CacheResolverFactory cacheResultResolverFactory, CacheKeyGenerator cacheResultKeyGenerator,
@@ -431,7 +435,8 @@ public class CDIJCacheHelper {
                 CacheKeyGenerator cachePutKeyGenerator, boolean cachePutAfter, CachePut cachePut, String cacheRemoveCacheName,
                 CacheResolverFactory cacheRemoveResolverFactory, CacheKeyGenerator cacheRemoveKeyGenerator,
                 boolean cacheRemoveAfter, CacheRemove cacheRemove, String cacheRemoveAllCacheName,
-                CacheResolverFactory cacheRemoveAllResolverFactory, CacheRemoveAll cacheRemoveAll) {
+                CacheResolverFactory cacheRemoveAllResolverFactory, CacheRemoveAll cacheRemoveAll,
+                boolean completionStage) {
             this.parameterTypes = parameterTypes;
             this.parameterAnnotations = parameterAnnotations;
             this.annotations = annotations;
@@ -454,6 +459,11 @@ public class CDIJCacheHelper {
             this.cacheRemoveAllCacheName = cacheRemoveAllCacheName;
             this.cacheRemoveAllResolverFactory = cacheRemoveAllResolverFactory;
             this.cacheRemoveAll = cacheRemoveAll;
+            this.completionStage = completionStage;
+        }
+
+        public boolean isCompletionStage() {
+            return completionStage;
         }
 
         public boolean isCacheRemoveAfter() {

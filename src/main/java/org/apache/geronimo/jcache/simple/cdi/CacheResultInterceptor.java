@@ -19,6 +19,7 @@
 package org.apache.geronimo.jcache.simple.cdi;
 
 import java.io.Serializable;
+import java.util.concurrent.CompletionStage;
 
 import javax.annotation.Priority;
 import javax.cache.Cache;
@@ -69,6 +70,9 @@ public class CacheResultInterceptor implements Serializable {
                 exceptionCache = cacheResolverFactory.getExceptionCacheResolver(context).resolveCache(context);
                 final Object exception = exceptionCache.get(cacheKey);
                 if (exception != null) {
+                    if (methodMeta.isCompletionStage()) {
+                        return exception;
+                    }
                     throw Throwable.class.cast(exception);
                 }
             }
@@ -78,6 +82,20 @@ public class CacheResultInterceptor implements Serializable {
             result = ic.proceed();
             if (result != null) {
                 cache.put(cacheKey, result);
+                if (CompletionStage.class.isInstance(result)) {
+                    final CompletionStage<?> completionStage = CompletionStage.class.cast(result);
+                    completionStage.exceptionally(t -> {
+                        if (helper.isIncluded(t.getClass(), cacheResult.cachedExceptions(), cacheResult.nonCachedExceptions())) {
+                            cacheResolverFactory.getExceptionCacheResolver(context).resolveCache(context).put(cacheKey, completionStage);
+                        } else {
+                            cache.remove(cacheKey);
+                        }
+                        if (RuntimeException.class.isInstance(t)) {
+                            throw RuntimeException.class.cast(t);
+                        }
+                        throw new IllegalStateException(t);
+                    });
+                }
             }
 
             return result;
