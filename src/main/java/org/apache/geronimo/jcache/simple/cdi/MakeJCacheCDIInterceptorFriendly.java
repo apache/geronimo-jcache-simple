@@ -18,14 +18,13 @@
  */
 package org.apache.geronimo.jcache.simple.cdi;
 
-import static java.util.Arrays.asList;
-
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import javax.cache.annotation.CachePut;
 import javax.cache.annotation.CacheRemove;
@@ -46,7 +45,6 @@ import javax.enterprise.inject.spi.InjectionPoint;
 import javax.enterprise.inject.spi.InjectionTarget;
 import javax.enterprise.inject.spi.PassivationCapable;
 import javax.enterprise.inject.spi.ProcessAnnotatedType;
-import javax.enterprise.util.AnnotationLiteral;
 
 // TODO: observe annotated type (or maybe sthg else) to cache data and inject this extension (used as metadata cache)
 // to get class model and this way allow to add cache annotation on the fly - == avoid java pure reflection to get metadata
@@ -59,35 +57,18 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
 
     private boolean needHelper = true;
 
-    protected void discoverInterceptorBindings(final @Observes BeforeBeanDiscovery beforeBeanDiscoveryEvent,
+    protected void discoverInterceptorBindings(final @Observes BeforeBeanDiscovery beforeBeanDiscovery,
             final BeanManager bm) {
         if (SKIP) {
             return;
         }
-        // CDI 1.1 will just pick createAnnotatedType(X) as beans so we'll skip our HelperBean
-        // but CDI 1.0 needs our HelperBean + interceptors in beans.xml like:
-        /*
-         * <beans xmlns="http://java.sun.com/xml/ns/javaee"
-         * xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         * xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
-         * http://java.sun.com/xml/ns/javaee/beans_1_0.xsd">
-         * <interceptors>
-         * <class>org.apache.geronimo.jcache.simple.cdi.CacheResultInterceptor</class>
-         * <class>org.apache.geronimo.jcache.simple.cdi.CacheRemoveAllInterceptor</class>
-         * <class>org.apache.geronimo.jcache.simple.cdi.CacheRemoveInterceptor</class>
-         * <class>org.apache.geronimo.jcache.simple.cdi.CachePutInterceptor</class>
-         * </interceptors>
-         * </beans>
-         */
-        bm.createAnnotatedType(CDIJCacheHelper.class);
-        for (final Class<?> interceptor : asList(CachePutInterceptor.class, CacheRemoveInterceptor.class,
-                CacheRemoveAllInterceptor.class, CacheResultInterceptor.class)) {
-            beforeBeanDiscoveryEvent.addAnnotatedType(bm.createAnnotatedType(interceptor));
-        }
-        for (final Class<? extends Annotation> interceptor : asList(CachePut.class, CacheRemove.class, CacheRemoveAll.class,
-                CacheResult.class)) {
-            beforeBeanDiscoveryEvent.addInterceptorBinding(interceptor);
-        }
+        Stream.of(CachePut.class, CacheRemove.class, CacheRemoveAll.class, CacheResult.class)
+                .forEach(it -> beforeBeanDiscovery.addInterceptorBinding(bm.createAnnotatedType(it)));
+        Stream.of(
+                CDIJCacheHelper.class,
+                CachePutInterceptor.class, CacheRemoveInterceptor.class,
+                CacheRemoveAllInterceptor.class, CacheRemoveInterceptor.class)
+                .forEach(it -> beforeBeanDiscovery.addAnnotatedType(bm.createAnnotatedType(it)));
     }
 
     protected void addHelper(final @Observes AfterBeanDiscovery afterBeanDiscovery, final BeanManager bm) {
@@ -97,20 +78,6 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
         if (!needHelper) {
             return;
         }
-        /*
-         * CDI >= 1.1 only. Actually we shouldn't go here with CDI 1.1 since we defined the annotated type for the helper
-         * final AnnotatedType<CDIJCacheHelper> annotatedType = bm.createAnnotatedType(CDIJCacheHelper.class);
-         * final BeanAttributes<CDIJCacheHelper> beanAttributes = bm.createBeanAttributes(annotatedType);
-         * final InjectionTarget<CDIJCacheHelper> injectionTarget = bm.createInjectionTarget(annotatedType);
-         * final Bean<CDIJCacheHelper> bean = bm.createBean(beanAttributes, CDIJCacheHelper.class, new
-         * InjectionTargetFactory<CDIJCacheHelper>() {
-         * 
-         * @Override
-         * public InjectionTarget<CDIJCacheHelper> createInjectionTarget(Bean<CDIJCacheHelper> bean) {
-         * return injectionTarget;
-         * }
-         * });
-         */
         final AnnotatedType<CDIJCacheHelper> annotatedType = bm.createAnnotatedType(CDIJCacheHelper.class);
         final InjectionTarget<CDIJCacheHelper> injectionTarget = bm.createInjectionTarget(annotatedType);
         final HelperBean bean = new HelperBean(annotatedType, injectionTarget, findIdSuffix());
@@ -153,10 +120,8 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
             this.id = "JCache#CDIHelper#" + id;
 
             this.qualifiers = new HashSet<>();
-            this.qualifiers.add(new AnnotationLiteral<Default>() {
-            });
-            this.qualifiers.add(new AnnotationLiteral<Any>() {
-            });
+            this.qualifiers.add(Default.Literal.INSTANCE);
+            this.qualifiers.add(Any.Literal.INSTANCE);
         }
 
         @Override
