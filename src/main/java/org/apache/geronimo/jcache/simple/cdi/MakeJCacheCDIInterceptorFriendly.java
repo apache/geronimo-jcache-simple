@@ -66,7 +66,7 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
                 .forEach(it -> beforeBeanDiscovery.addInterceptorBinding(bm.createAnnotatedType(it)));
         Stream.of(
                 CDIJCacheHelper.class,
-                CachePutInterceptor.class, CacheRemoveInterceptor.class,
+                CachePutInterceptor.class, CacheResultInterceptor.class,
                 CacheRemoveAllInterceptor.class, CacheRemoveInterceptor.class)
                 .forEach(it -> beforeBeanDiscovery.addAnnotatedType(bm.createAnnotatedType(it)));
     }
