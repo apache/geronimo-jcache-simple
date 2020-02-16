@@ -46,7 +46,8 @@ public class JCacheActivator implements BundleActivator {
                 CachingProvider.class, new SimpleProvider(), cachingProvider);
 
         final Dictionary<String, Object> jcacheExtension = new Hashtable<>();
-        jcacheExtension.put("osgi.cdi.extension", "implicit"); // always enable since it just enable interceptors
+        jcacheExtension.put("osgi.cdi.extension", "geronimo-jcache-simple");
+        jcacheExtension.put("aries.cdi.extension.mode", "implicit"); // always enable/-able since it just enable interceptors
         jcacheExtensionRegistration = context.registerService(
                 Extension.class, new PrototypeServiceFactory<Extension>() {
                     @Override
