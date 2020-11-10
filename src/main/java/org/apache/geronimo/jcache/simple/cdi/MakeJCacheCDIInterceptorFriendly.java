@@ -45,6 +45,7 @@ import javax.enterprise.inject.spi.InjectionPoint;
 import javax.enterprise.inject.spi.InjectionTarget;
 import javax.enterprise.inject.spi.PassivationCapable;
 import javax.enterprise.inject.spi.ProcessAnnotatedType;
+import javax.enterprise.inject.spi.ProcessSyntheticAnnotatedType;
 
 // TODO: observe annotated type (or maybe sthg else) to cache data and inject this extension (used as metadata cache)
 // to get class model and this way allow to add cache annotation on the fly - == avoid java pure reflection to get metadata
@@ -57,7 +58,7 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
 
     private boolean needHelper = true;
 
-    protected void discoverInterceptorBindings(final @Observes BeforeBeanDiscovery beforeBeanDiscovery,
+    public void discoverInterceptorBindings(final @Observes BeforeBeanDiscovery beforeBeanDiscovery,
             final BeanManager bm) {
         if (SKIP) {
             return;
@@ -71,7 +72,7 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
                 .forEach(it -> beforeBeanDiscovery.addAnnotatedType(bm.createAnnotatedType(it)));
     }
 
-    protected void addHelper(final @Observes AfterBeanDiscovery afterBeanDiscovery, final BeanManager bm) {
+    public void addHelper(final @Observes AfterBeanDiscovery afterBeanDiscovery, final BeanManager bm) {
         if (SKIP) {
             return;
         }
@@ -84,11 +85,11 @@ public class MakeJCacheCDIInterceptorFriendly implements Extension {
         afterBeanDiscovery.addBean(bean);
     }
 
-    protected void vetoScannedCDIJCacheHelperQualifiers(final @Observes ProcessAnnotatedType<CDIJCacheHelper> pat) {
+    public void vetoScannedCDIJCacheHelperQualifiers(final @Observes ProcessAnnotatedType<CDIJCacheHelper> pat) {
         if (SKIP) {
             return;
         }
-        if (!needHelper) { // already seen, shouldn't really happen,just a protection
+        if (!needHelper && !ProcessSyntheticAnnotatedType.class.isInstance(pat)) { // already seen, shouldn't really happen,just a protection
             pat.veto();
         }
         needHelper = false;
